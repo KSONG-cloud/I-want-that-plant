@@ -1,0 +1,56 @@
+
+Table follows {
+  following_user_id bigint
+  followed_user_id bigint
+  created_at timestamp [not null]
+
+  indexes {
+    (following_user_id, followed_user_id) [pk]
+  }
+}
+
+Table favorites {
+  listings_id bigint
+  user_id bigint
+  created_at timestamp [not null]
+
+  indexes {
+    (user_id, listings_id) [pk]
+  }
+}
+
+Table users {
+  id bigint [primary key]
+  username varchar [not null]
+  password_hash varchar [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
+Table listings {
+  id bigint [primary key]
+  name varchar(255) [not null]
+  scientific_name varchar(255)
+  quantity integer [not null]
+  address_line_1 varchar(255)
+  address_line_2 varchar(255)
+  suburb varchar(100)
+  state varchar(100)
+  postal_code varchar(20)
+  country_code varchar(2)
+  description text
+  user_id bigint [not null]
+  status varchar(20) [not null]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+
+Ref: favorites.user_id ?> users.id
+
+Ref: favorites.listings_id ?> listings.id
+
+Ref: listings.user_id ?> users.id
+
+Ref: follows.following_user_id ?> users.id
+
+Ref: follows.followed_user_id ?> users.id
