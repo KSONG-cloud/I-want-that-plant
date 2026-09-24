@@ -8,7 +8,8 @@ load_dotenv()
 
 API_KEY = os.getenv('PERENUAL_API_KEY')
 OUTPUT_FILE = 'data_plants.json'
-PAGES_TO_FETCH = 4
+PAGES_TO_FETCH = 10
+FETCH_IMAGES = False
 
 if not API_KEY:
         print("Error: PERENUAL_API_KEY is missing from your .env file.")
@@ -29,13 +30,19 @@ for page in range(1, PAGES_TO_FETCH+1):
                 if name:
                     scientific_list = plant.get('scientific_name', [])
                     scientific_name = scientific_list[0] if scientific_list else None
-                    img_obj = plant.get('default_image')
+                    if FETCH_IMAGES:
+                        img_obj = plant.get('default_image')
                     
-                    data_plants.append({
-                        'name': name.title(),
-                        'scientific_name': scientific_name,
-                        'image_url': img_obj.get('regular_url') if img_obj else None,
-                    })
+                        data_plants.append({
+                            'name': name.title(),
+                            'scientific_name': scientific_name,
+                            'image_url': img_obj.get('regular_url') if img_obj else None,
+                        })
+                    else:
+                        data_plants.append({
+                            'name': name.title(),
+                            'scientific_name': scientific_name,
+                        })
         
         else:
             print(f"Http request failed on page {page}/{PAGES_TO_FETCH} with "
