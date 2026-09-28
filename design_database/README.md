@@ -40,7 +40,7 @@ Description: Mockups and designs for the database.
     exit
     ```
 
-## Inserting Test Data
+## Inserting Test Data into Local MySQL Database
 - Install Python dependencies:
     ```bash
     $ pip install python-dotenv
@@ -70,25 +70,33 @@ Description: Mockups and designs for the database.
 
     To modify the behaviour of the script, you can tweak the parameters found at the top of the `testdata_generator_mysql.py` file:
     ```SQL
+    FAKER_LOCALE = "en_AU"
     NUM_USERS = 150
+    USER_PROBABILITY_OF_PHONE = 0.8
     USER_MIN_FOLLOWERS = 0
     USER_MAX_FOLLOWERS = 40
     NUM_LISTINGS = 300
+    LISTING_MIN_QUANTITY = 1
     LISTING_MAX_QUANTITY = 20
+    LISTING_MIN_PRICE = 0
+    LISTING_MAX_PRICE = 500
+    LISTING_CURRENCY_CODE = "AUD"
     LISTING_PROBABILITY_OF_SECONDARYADDRESS = 0.5
-    LISTING_GENERATE_DESCRIPTIONS = True
+    LISTING_GENERATE_DESCRIPTIONS = False
     LISTING_DESCRIPTION_MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
     LISTING_MIN_FAVORITES = 0
     LISTING_MAX_FAVORITES = 100
     ```
     The script performs the following actions when generating testing data:
-    - For each user, a fake username and password is generated. The password is salted and hashed with bcrypt.
+    - Fake data is generated with geographical bias according to `FAKER_LOCALE`.
+    - For each user, a fake email, password, username and phone number is generated. The password is salted and hashed with bcrypt.
     For reference, the plaintext passwords are also saved to a csv file (although this file is not configured to be tracked by git).
     - Each user has between `USER_MIN_FOLLOWERS` and `USER_MAX_FOLLOWERS` followers generated, drawn without replacement.
     These are added to the follows table.
     - For each listing, a random plant from `data_plants.json` is selected, with replacement.
     `data_plants.json` supplies the common and scientific name of the plant.
-    A random quantity between `1` and `LISTING_MAX_QUANTITY` is selected.
+    A random quantity between `LISTING_MIN_QUANTITY` and `LISTING_MAX_QUANTITY` is selected.
+    A random price between `LISTING_MIN_PRICE` and `LISTING_MAX_PRICE` is selected (currency code is currently hardcoded to "AUD").
     A fake address is generated.
     A random user is selected to be the seller.
     If `LISTING_GENERATE_DESCRIPTIONS = True` then the Qwen 2.5 model will be pulled from [Hugging Face](https://huggingface.co/) (if it is not already cached) and this model will be used to generate a description of the listing.

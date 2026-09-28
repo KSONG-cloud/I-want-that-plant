@@ -5,6 +5,7 @@ import sys
 import csv
 import json
 import random
+from decimal import Decimal
 from dotenv import load_dotenv
 import mysql.connector
 from mysql.connector import errorcode
@@ -17,13 +18,19 @@ MYSQL_DB_NAME = 'plant_project'
 FILE_DATA_PLANTS = 'data_plants.json'
 FILE_PLAINTEXTPASSWORDS = 'data_users_plaintextpasswords.csv'
 
+FAKER_LOCALE = "en_AU"
 NUM_USERS = 150
+USER_PROBABILITY_OF_PHONE = 0.8
 USER_MIN_FOLLOWERS = 0
 USER_MAX_FOLLOWERS = 40
 NUM_LISTINGS = 300
+LISTING_MIN_QUANTITY = 1
 LISTING_MAX_QUANTITY = 20
+LISTING_MIN_PRICE = 0
+LISTING_MAX_PRICE = 500
+LISTING_CURRENCY_CODE = "AUD"
 LISTING_PROBABILITY_OF_SECONDARYADDRESS = 0.5
-LISTING_GENERATE_DESCRIPTIONS = True
+LISTING_GENERATE_DESCRIPTIONS = False
 LISTING_DESCRIPTION_MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 LISTING_MIN_FAVORITES = 0
 LISTING_MAX_FAVORITES = 100
@@ -131,27 +138,29 @@ cursor = None
 try:
     cnx = mysql.connector.connect(**config)
     cursor = cnx.cursor()
-    fake = Faker()
+    fake = Faker(FAKER_LOCALE)
 
     query_next_userid = """
         SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users';
+        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'user';
     """
     cursor.execute(query_next_userid, (MYSQL_DB_NAME,))
     next_userid = cursor.fetchone()[0]
 
     query_next_listingid = """
         SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'listings';
+        WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'listing';
     """
     cursor.execute(query_next_listingid, (MYSQL_DB_NAME,))
     next_listingid = cursor.fetchone()[0]
 
     add_user = """
-        INSERT INTO users (
+        INSERT INTO user (
+            email,
+            password_hash,
             username,
-            password_hash
-        ) VALUES (%s, %s);
+            phone
+        ) VALUES (%s, %s, %s, %s);
     """
     
     data_users = []
@@ -159,14 +168,19 @@ try:
 
     print_progress_bar(0, NUM_USERS, prefix='user data', length=40)
     for i in range(NUM_USERS):
-        username = fake.user_name()
+        username = fake.unique.user_name()
         password_plaintext = fake.password()
         password_hash = (
             bcrypt.hashpw(password_plaintext.encode('utf-8'), bcrypt.gensalt())
                 .decode('utf-8')
         )
 
-        data_users.append((username, password_hash))
+        data_users.append((
+            f"{username}@{fake.free_email_domain()}",
+            password_hash,
+            username,
+            fake.phone_number() if random.random() < USER_PROBABILITY_OF_PHONE else None
+        ))
         data_users_plaintextpasswords.append([password_plaintext])
 
         print_progress_bar(i+1, NUM_USERS, prefix='user data', length=40)
@@ -195,15 +209,15 @@ try:
         print_progress_bar(i+1, NUM_USERS, prefix='follow data', length=40)
 
     add_listing = """
-        INSERT INTO listings (
-            name, scientific_name, quantity, address_line_1, address_line_2,
-            suburb, state, postal_code, country_code, description, user_id
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        INSERT INTO listing (
+            name, scientific_name, quantity, price_perunit, currency_code, address_line_1, address_line_2,
+            suburb, state, postal_code, country_code, description, seller_user_id
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
     """
 
     add_favorite = """
         INSERT INTO favorites (
-            listings_id,
+            listing_id,
             user_id
         ) VALUES (%s, %s);
     """
@@ -213,11 +227,13 @@ try:
 
     print_progress_bar(0, NUM_LISTINGS, prefix='listing data', length=40)
     for i, random_plant in enumerate(random.choices(data_plants, k=NUM_LISTINGS)):
-        quantity = random.randint(1, LISTING_MAX_QUANTITY)
+        quantity = random.randint(LISTING_MIN_QUANTITY, LISTING_MAX_QUANTITY)
+        price_perunit = Decimal(str(round(random.uniform(LISTING_MIN_PRICE, LISTING_MAX_PRICE), 2)))
         suburb = fake.city()
+        state = fake.state_abbr()
         country_code = fake.country_code(representation='alpha-2')
         description = ""
-        user_id = random.choice(list(range(next_userid, next_userid + NUM_USERS)))
+        seller_user_id = random.choice(list(range(next_userid, next_userid + NUM_USERS)))
 
         if LISTING_GENERATE_DESCRIPTIONS:
             description = listing_description_create(
@@ -225,19 +241,19 @@ try:
                 plant_name=random_plant["name"],
                 scientific_name=random_plant["scientific_name"],
                 quantity=quantity,
-                address=suburb+", "+country_code,
-                username=data_users[user_id-next_userid][0]
+                address=suburb+", "+state,
+                username=data_users[seller_user_id-next_userid][2]
             )
 
         data_listings.append((
-            random_plant['name'], random_plant['scientific_name'], quantity,
+            random_plant['name'], random_plant['scientific_name'], quantity, price_perunit, LISTING_CURRENCY_CODE,
             fake.street_address(), fake.secondary_address() if random.random() < LISTING_PROBABILITY_OF_SECONDARYADDRESS else None,
-            suburb, fake.state_abbr(), fake.postcode(), country_code, description, user_id,
+            suburb, state, fake.postcode(), country_code, description, seller_user_id,
         ))
 
         num_favorites = random.randint(LISTING_MIN_FAVORITES, min(LISTING_MAX_FAVORITES, NUM_USERS-1))
         favoriter_ids = random.sample(
-            [id for id in range(next_userid, next_userid + NUM_USERS) if id != user_id],
+            [id for id in range(next_userid, next_userid + NUM_USERS) if id != seller_user_id],
             k=num_favorites
         )
         for favoriter_id in favoriter_ids:
